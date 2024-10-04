@@ -36,6 +36,7 @@ def bot(history):
         user_input = last_user_message
 
     # Get the LLM's response
+    #ToDo: use the history to generate a response
     llm_response = llm.invoke(user_input)
 
     # Update the history with the LLM's response
