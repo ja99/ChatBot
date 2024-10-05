@@ -1,14 +1,6 @@
 import gradio as gr
-import plotly.express as px
 from langchain_community.llms import Ollama
 
-# Chatbot demo with multimodal input (text, markdown, LaTeX, code blocks, image, audio, & video). Plus shows support for streaming text.
-
-def random_plot():
-    df = px.data.iris()
-    fig = px.scatter(df, x="sepal_width", y="sepal_length", color="species",
-                     size='petal_length', hover_data=['petal_width'])
-    return fig
 
 def print_like_dislike(x: gr.LikeData):
     print(x.index, x.value, x.liked)
@@ -37,13 +29,13 @@ def bot(history):
 
     # Get the LLM's response
     #ToDo: use the history to generate a response
+    #ToDo: stream the text
     llm_response = llm.invoke(user_input)
 
     # Update the history with the LLM's response
     history[-1][1] = llm_response
     return history
 
-fig = random_plot()
 
 with gr.Blocks(fill_height=True) as demo:
     chatbot = gr.Chatbot(
