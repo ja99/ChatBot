@@ -1,7 +1,6 @@
 import gradio as gr
 from langchain_community.llms import Ollama
 
-
 def print_like_dislike(x: gr.LikeData):
     print(x.index, x.value, x.liked)
 
@@ -19,23 +18,31 @@ def add_message(history, message):
 llm = Ollama(model="phi3:latest")
 
 def bot(history):
+    # Construct the conversation history as a string
+    conversation = ''
+    for h in history[:-1]:
+        user_msg = h[0]
+        bot_msg = h[1]
+        if isinstance(user_msg, tuple):
+            user_msg = "User uploaded a file."
+        conversation += f"User: {user_msg}\n"
+        if bot_msg:
+            conversation += f"Assistant: {bot_msg}\n"
     # Get the last user message
     last_user_message = history[-1][0]
     if isinstance(last_user_message, tuple):
-        # Handle file inputs
-        user_input = "User uploaded a file."
-    else:
-        user_input = last_user_message
+        last_user_message = "User uploaded a file."
+    conversation += f"User: {last_user_message}\nAssistant:"
 
-    # Get the LLM's response
-    #ToDo: use the history to generate a response
-    #ToDo: stream the text
-    llm_response = llm.invoke(user_input)
-
-    # Update the history with the LLM's response
-    history[-1][1] = llm_response
-    return history
-
+    # Initialize the response
+    llm_response = ""
+    # Stream the response from the LLM
+    for chunk in llm.stream(conversation):
+        llm_response += chunk
+        # Update the last entry in history with the current response
+        history[-1][1] = llm_response
+        # Yield the updated history
+        yield history
 
 with gr.Blocks(fill_height=True) as demo:
     chatbot = gr.Chatbot(
