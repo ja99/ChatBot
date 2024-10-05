@@ -1,23 +1,46 @@
 import gradio as gr
 from langchain_community.llms import Ollama
 
+# Additional imports
+from langchain_community.document_loaders import PyPDFLoader
+from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_community.vectorstores import FAISS
+
+# Initialize embeddings and vectorstore
+embeddings = HuggingFaceEmbeddings(model_name='sentence-transformers/all-MiniLM-L6-v2')
+vectorstore = None  # Initialize vectorstore as None
+
+# Initialize the Ollama LLM
+llm = Ollama(model="phi3:latest")
+
 def print_like_dislike(x: gr.LikeData):
     print(x.index, x.value, x.liked)
 
 def add_message(history, message):
+    global vectorstore  # Declare vectorstore as global
     # Handle file uploads
     for file_path in message["files"]:
-        # Process files as needed (e.g., extract text from images, PDFs, etc.)
-        history.append(((file_path,), None))
+        # Process PDF files
+        if file_path.endswith(".pdf"):
+            # Load the PDF
+            loader = PyPDFLoader(file_path)
+            documents = loader.load()
+            # Add documents to vector store
+            if vectorstore is None:
+                vectorstore = FAISS.from_documents(documents, embeddings)
+            else:
+                vectorstore.add_documents(documents)
+            history.append((f"Uploaded and processed PDF: {file_path}", None))
+        else:
+            # For other file types
+            history.append(((file_path,), None))
     # Handle text input
     if message["text"] is not None:
         history.append((message["text"], None))
     return history, gr.MultimodalTextbox(value=None, interactive=False)
 
-# Initialize the Ollama LLM
-llm = Ollama(model="phi3:latest")
-
 def bot(history):
+    global vectorstore  # Declare vectorstore as global
     # Construct the conversation history as a string
     conversation = ''
     for h in history[:-1]:
@@ -34,10 +57,20 @@ def bot(history):
         last_user_message = "User uploaded a file."
     conversation += f"User: {last_user_message}\nAssistant:"
 
+    # Retrieve relevant documents from vectorstore
+    context = ''
+    if vectorstore is not None:
+        relevant_docs = vectorstore.similarity_search(last_user_message, k=3)  # adjust k as needed
+        # Extract the text from these documents
+        context = "\n".join([doc.page_content for doc in relevant_docs])
+
+    # Combine context and conversation
+    prompt = f"{conversation}\nRelevant context:\n{context}\nAssistant:"
+
     # Initialize the response
     llm_response = ""
     # Stream the response from the LLM
-    for chunk in llm.stream(conversation):
+    for chunk in llm.stream(prompt):
         llm_response += chunk
         # Update the last entry in history with the current response
         history[-1][1] = llm_response
